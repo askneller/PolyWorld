@@ -16,6 +16,7 @@
 
 package org.terasology.polyworld.water;
 
+import com.google.common.collect.Maps;
 import org.terasology.polyworld.distribution.Distribution;
 import org.terasology.polyworld.distribution.PerlinDistribution;
 import org.terasology.polyworld.distribution.RadialDistribution;
@@ -33,6 +34,8 @@ import org.terasology.world.generation.Requires;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+
+import java.util.Map;
 
 /**
  * TODO Type description
@@ -56,7 +59,7 @@ public class WaterModelFacetProvider implements FacetProvider {
 
     };
 
-    private final LoadingCache<Graph, WaterModel> waterModelCache;
+    private final Map<Graph, WaterModel> waterModelCache;
 
     private long seed;
 
@@ -64,14 +67,14 @@ public class WaterModelFacetProvider implements FacetProvider {
      * @param maxCacheSize maximum number of cached models
      */
     public WaterModelFacetProvider(int maxCacheSize) {
-        waterModelCache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(loader);
+        waterModelCache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(loader);
     }
 
     @Override
     public void setSeed(long seed) {
         if (this.seed != seed) {
             this.seed = seed;
-            waterModelCache.invalidateAll();
+            waterModelCache.clear();
         }
     }
 
@@ -87,10 +90,20 @@ public class WaterModelFacetProvider implements FacetProvider {
             if (wr.getType() == RegionType.OCEAN) {
                 waterFacet.add(g, new PureOceanWaterModel());
             } else {
-                waterFacet.add(g, waterModelCache.getUnchecked(g));
+                waterFacet.add(g, load(g));
             }
         }
 
         region.setRegionFacet(WaterModelFacet.class, waterFacet);
+    }
+
+    public WaterModel load(Graph key) {
+        long graphSeed = seed ^ key.getBounds().hashCode();
+
+        Distribution waterDist = (graphSeed % 2 == 0)  // a very primitive noise function
+                ? new PerlinDistribution(graphSeed)
+                : new RadialDistribution(graphSeed);
+
+        return new DefaultWaterModel(key, waterDist);
     }
 }

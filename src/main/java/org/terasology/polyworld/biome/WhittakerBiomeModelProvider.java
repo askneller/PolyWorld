@@ -16,9 +16,11 @@
 
 package org.terasology.polyworld.biome;
 
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
+import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.terasology.polyworld.elevation.ElevationModel;
@@ -52,13 +54,13 @@ public class WhittakerBiomeModelProvider implements FacetProvider {
 
     private static final Logger logger = LoggerFactory.getLogger(WhittakerBiomeModelProvider.class);
 
-    private final Cache<Graph, BiomeModel> modelCache;
+    private final Map<Graph, BiomeModel> modelCache;
 
     /**
      * @param maxCacheSize maximum number of cached models
      */
     public WhittakerBiomeModelProvider(int maxCacheSize) {
-        modelCache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build();
+        modelCache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build();
     }
 
     @Override
@@ -88,17 +90,19 @@ public class WhittakerBiomeModelProvider implements FacetProvider {
     }
 
     private BiomeModel getOrCreate(Graph graph, final ElevationModel elevationModel, final WaterModel waterModel, final MoistureModel moistureModel) {
-        try {
-            return modelCache.get(graph, new Callable<BiomeModel>() {
-
-                @Override
-                public BiomeModel call() {
-                    return new DefaultBiomeModel(elevationModel, waterModel, moistureModel);
-                }
-            });
-        } catch (ExecutionException e) {
-            logger.error("Could not create elevation model", e.getCause());
-            return null;
+        BiomeModel biomeModel = modelCache.get(graph);
+        if (biomeModel == null) {
+            biomeModel = call(graph, elevationModel, waterModel, moistureModel);
         }
+//        try {
+            return biomeModel;
+//        } catch (ExecutionException e) {
+//            logger.error("Could not create elevation model", e.getCause());
+//            return null;
+//        }
+    }
+
+    public BiomeModel call(Graph graph, final ElevationModel elevationModel, final WaterModel waterModel, final MoistureModel moistureModel) {
+        return new DefaultBiomeModel(elevationModel, waterModel, moistureModel);
     }
 }

@@ -19,9 +19,11 @@ package org.terasology.polyworld.graph;
 import java.math.RoundingMode;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.terasology.entitySystem.Component;
@@ -84,8 +86,8 @@ public class GraphFacetProvider implements ConfigurableFacetProvider {
         }
     };
 
-    private final LoadingCache<WorldRegion, Graph> graphCache;
-    private final LoadingCache<Graph, TriangleLookup> lookupCache;
+    private final Map<WorldRegion, Graph> graphCache;
+    private final Map<Graph, TriangleLookup> lookupCache;
 
     private long seed;
     private int graphUniformity = 1;
@@ -96,13 +98,13 @@ public class GraphFacetProvider implements ConfigurableFacetProvider {
      * @param maxCacheSize maximum number of cached graphs
      */
     public GraphFacetProvider(int maxCacheSize) {
-        graphCache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(graphLoader);
-        lookupCache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(lookupLoader);
+        graphCache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(graphLoader);
+        lookupCache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(lookupLoader);
     }
 
     public GraphFacetProvider(int maxCacheSize, float graphDensity, int graphUniformity) {
-        graphCache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(graphLoader);
-        lookupCache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(lookupLoader);
+        graphCache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(graphLoader);
+        lookupCache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(lookupLoader);
         configuration.graphDensity = graphDensity;
         this.graphUniformity = graphUniformity;
     }
@@ -122,13 +124,13 @@ public class GraphFacetProvider implements ConfigurableFacetProvider {
 
 
         for (WorldRegion wr : areas) {
-            Graph graph = graphCache.getIfPresent(wr);
-            TriangleLookup lookup = graph == null ? null : lookupCache.getIfPresent(graph);
+            Graph graph = graphCache.get(wr);
+            TriangleLookup lookup = graph == null ? null : lookupCache.get(graph);
             if (lookup == null) {
                 try {
                     lock.readLock().lock();
-                    graph = graphCache.getUnchecked(wr);
-                    lookup = lookupCache.getUnchecked(graph);
+                    graph = loadGraph(wr);
+                    lookup = load(graph);
                 } finally {
                     lock.readLock().unlock();
                 }
@@ -203,8 +205,8 @@ public class GraphFacetProvider implements ConfigurableFacetProvider {
         try {
             lock.writeLock().lock();
             this.configuration = (GraphProviderConfiguration) configuration;
-            graphCache.invalidateAll();
-            lookupCache.invalidateAll();
+            graphCache.clear();
+            lookupCache.clear();
         } finally {
             lock.writeLock().unlock();
         }
@@ -214,5 +216,19 @@ public class GraphFacetProvider implements ConfigurableFacetProvider {
         @Range(min = 0.1f, max = 10f, increment = 0.1f, precision = 1, description = "Define the density for graph " +
                 "cells")
         private float graphDensity = 2f;
+    }
+
+    public Graph loadGraph(WorldRegion wr) {
+        Stopwatch sw = Stopwatch.createStarted();
+
+        Graph graph = createGraph(wr);
+
+        logger.info("Created graph for {} in {}ms.", wr.getArea(), sw.elapsed(TimeUnit.MILLISECONDS));
+
+        return graph;
+    }
+
+    public TriangleLookup load(Graph graph) {
+        return new TriangleLookup(graph);
     }
 }

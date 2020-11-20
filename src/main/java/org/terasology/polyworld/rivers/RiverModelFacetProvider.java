@@ -16,9 +16,11 @@
 
 package org.terasology.polyworld.rivers;
 
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
+import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.terasology.polyworld.elevation.ElevationModel;
@@ -51,7 +53,7 @@ public class RiverModelFacetProvider implements FacetProvider {
 
     private static final Logger logger = LoggerFactory.getLogger(RiverModelFacetProvider.class);
 
-    private final Cache<Graph, RiverModel> modelCache;
+    private final Map<Graph, RiverModel> modelCache;
 
     private long seed;
 
@@ -59,14 +61,14 @@ public class RiverModelFacetProvider implements FacetProvider {
      * @param maxCacheSize maximum number of cached models
      */
     public RiverModelFacetProvider(int maxCacheSize) {
-        modelCache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build();
+        modelCache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build();
     }
 
     @Override
     public void setSeed(long seed) {
         if (this.seed != seed) {
             this.seed = seed;
-            modelCache.invalidateAll();
+            modelCache.clear();
         }
     }
 
@@ -88,18 +90,19 @@ public class RiverModelFacetProvider implements FacetProvider {
     }
 
     private RiverModel getOrCreate(final Graph graph, final ElevationModel elevationModel, final WaterModel waterModel) {
-        try {
-            return modelCache.get(graph, new Callable<RiverModel>() {
-
-                @Override
-                public RiverModel call() {
-                    return new DefaultRiverModel(graph, elevationModel, waterModel);
-                }
-            });
-        } catch (ExecutionException e) {
-            logger.error("Could not create elevation model", e.getCause());
-            return null;
+//        try {
+        RiverModel riverModel = modelCache.get(graph);
+        if (riverModel == null) {
+            riverModel = call(graph, elevationModel, waterModel);
         }
+//        } catch (ExecutionException e) {
+//            logger.error("Could not create elevation model", e.getCause());
+//            return null;
+//        }
+        return riverModel;
     }
 
+    public RiverModel call(final Graph graph, final ElevationModel elevationModel, final WaterModel waterModel) {
+        return new DefaultRiverModel(graph, elevationModel, waterModel);
+    }
 }

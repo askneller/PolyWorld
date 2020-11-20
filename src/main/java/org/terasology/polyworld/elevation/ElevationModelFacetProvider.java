@@ -16,9 +16,11 @@
 
 package org.terasology.polyworld.elevation;
 
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
+import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.terasology.polyworld.graph.Graph;
@@ -49,13 +51,13 @@ public class ElevationModelFacetProvider implements FacetProvider {
 
     private static final Logger logger = LoggerFactory.getLogger(ElevationModelFacetProvider.class);
 
-    private final Cache<Graph, ElevationModel> elevationCache;
+    private final Map<Graph, ElevationModel> elevationCache;
 
     /**
      * @param maxCacheSize maximum number of cached models
      */
     public ElevationModelFacetProvider(int maxCacheSize) {
-        elevationCache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build();
+        elevationCache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build();
     }
 
     @Override
@@ -83,17 +85,19 @@ public class ElevationModelFacetProvider implements FacetProvider {
     }
 
     private ElevationModel getOrCreate(final Graph graph, final WaterModel waterModel, final float scale) {
-        try {
-            return elevationCache.get(graph, new Callable<ElevationModel>() {
+//        try {
+            ElevationModel elevationModel = elevationCache.get(graph);
+            if (elevationModel == null) {
+                elevationModel = call(graph, waterModel, scale);
+            }
+            return elevationModel;
+//        } catch (ExecutionException e) {
+//            logger.error("Could not create elevation model", e.getCause());
+//            return null;
+//        }
+    }
 
-                @Override
-                public ElevationModel call() {
-                    return new DefaultElevationModel(graph, waterModel, scale);
-                }
-            });
-        } catch (ExecutionException e) {
-            logger.error("Could not create elevation model", e.getCause());
-            return null;
-        }
+    public ElevationModel call(final Graph graph, final WaterModel waterModel, final float scale) {
+        return new DefaultElevationModel(graph, waterModel, scale);
     }
 }

@@ -18,8 +18,10 @@ package org.terasology.polyworld.rp;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import com.google.common.collect.Maps;
 import org.terasology.commonworld.Sector;
 import org.terasology.commonworld.Sectors;
 import org.terasology.entitySystem.Component;
@@ -76,7 +78,7 @@ public class WorldRegionFacetProvider implements ConfigurableFacetProvider {
         }
     };
 
-    private final LoadingCache<Rect2i, Collection<WorldRegion>> cache;
+    private final Map<Rect2i, Collection<WorldRegion>> cache;
 
     private long seed;
 
@@ -84,11 +86,11 @@ public class WorldRegionFacetProvider implements ConfigurableFacetProvider {
      * @param maxCacheSize maximum number of cached regions
      */
     public WorldRegionFacetProvider(int maxCacheSize) {
-        cache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(loader);
+        cache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(loader);
     }
 
     public WorldRegionFacetProvider(int maxCacheSize,float islandDensity) {
-        cache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(loader);
+        cache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build(loader);
         configuration.islandDensity =  islandDensity;
     }
 
@@ -120,11 +122,11 @@ public class WorldRegionFacetProvider implements ConfigurableFacetProvider {
                 Rect2i sb = sector.getWorldBounds();
                 Rect2i fullArea = Rect2i.createFromMinAndSize(sb.minX(), sb.minY(), sb.width(), sb.height());
 
-                Collection<WorldRegion> collection = cache.getIfPresent(fullArea);
+                Collection<WorldRegion> collection = cache.get(fullArea);
                 if (collection == null) {
                     try {
                         lock.readLock().lock();
-                        collection = cache.getUnchecked(fullArea);
+                        collection = load(fullArea);
                     } finally {
                         lock.readLock().unlock();
                     }
@@ -156,7 +158,7 @@ public class WorldRegionFacetProvider implements ConfigurableFacetProvider {
             lock.writeLock().lock();
             this.configuration = (Configuration) configuration;
             setSeed(seed); // trigger updating fields with new configuration
-            cache.invalidateAll();
+            cache.clear();
         } finally {
             lock.writeLock().unlock();
         }
@@ -169,5 +171,25 @@ public class WorldRegionFacetProvider implements ConfigurableFacetProvider {
 
         @Range(min = 0.1f, max = 1.0f, increment = 0.1f, precision = 1, description = "Define the ratio islands/water")
         private float islandDensity = 0.7f;
+    }
+
+    public Collection<WorldRegion> load(Rect2i fullArea) {
+        float maxArea = 0.75f * Sector.SIZE_X * Sector.SIZE_Z;
+
+        List<WorldRegion> result = Lists.newArrayList();
+        for (Rect2i area : regionProvider.getSectorRegions(fullArea)) {
+            float rnd = islandRatioNoise.noise(area.minX(), area.minY());
+            float scale = area.area() / maxArea;
+
+            WorldRegion wr = new WorldRegion(area);
+            wr.setHeightScaleFactor(scale);
+            if (rnd < configuration.islandDensity) {
+                wr.setType(RegionType.ISLAND);
+            } else {
+                wr.setType(RegionType.OCEAN);
+            }
+            result.add(wr);
+        }
+        return result;
     }
 }

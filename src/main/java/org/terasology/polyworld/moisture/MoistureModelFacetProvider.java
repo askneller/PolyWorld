@@ -16,9 +16,11 @@
 
 package org.terasology.polyworld.moisture;
 
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
+import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.terasology.polyworld.graph.Graph;
@@ -49,7 +51,7 @@ public class MoistureModelFacetProvider implements FacetProvider {
 
     private static final Logger logger = LoggerFactory.getLogger(MoistureModelFacetProvider.class);
 
-    private final Cache<Graph, MoistureModel> modelCache;
+    private final Map<Graph, MoistureModel> modelCache;
 
     private long seed;
 
@@ -57,14 +59,14 @@ public class MoistureModelFacetProvider implements FacetProvider {
      * @param maxCacheSize maximum number of cached models
      */
     public MoistureModelFacetProvider(int maxCacheSize) {
-        modelCache = CacheBuilder.newBuilder().maximumSize(maxCacheSize).build();
+        modelCache = Maps.newHashMap(); //CacheBuilder.newBuilder().maximumSize(maxCacheSize).build();
     }
 
     @Override
     public void setSeed(long seed) {
         if (this.seed != seed) {
             this.seed = seed;
-            modelCache.invalidateAll();
+            modelCache.clear();
         }
     }
 
@@ -86,18 +88,19 @@ public class MoistureModelFacetProvider implements FacetProvider {
     }
 
     private MoistureModel getOrCreate(final Graph graph, final RiverModel riverModel, final WaterModel waterModel) {
-        try {
-            return modelCache.get(graph, new Callable<MoistureModel>() {
-
-                @Override
-                public MoistureModel call() {
-                    return new DefaultMoistureModel(graph, riverModel, waterModel);
-                }
-            });
-        } catch (ExecutionException e) {
-            logger.error("Could not create moisture model", e.getCause());
-            return null;
+//        try {
+        MoistureModel moistureModel = modelCache.get(graph);
+        if (moistureModel == null) {
+            moistureModel = call(graph, riverModel, waterModel);
         }
+        return moistureModel;
+//        } catch (ExecutionException e) {
+//            logger.error("Could not create moisture model", e.getCause());
+//            return null;
+//        }
     }
 
+    public MoistureModel call(final Graph graph, final RiverModel riverModel, final WaterModel waterModel) {
+        return new DefaultMoistureModel(graph, riverModel, waterModel);
+    }
 }
